@@ -9,7 +9,8 @@
     --bezel: #0b0d0c;        /* Bildschirmrahmen */
     --screen: #050807;       /* Röhre aus */
     --phosphor: #e9f2e4;     /* weisslicher Phosphor wie beim Original 1972 */
-    --brass: #c9a35b;        /* Akzent: Münzschlitz-Messing */
+    --ball: #fff3a8;         /* hellgelber Ball */
+    --brass: #c9a35b;       /* Akzent: Münzschlitz-Messing */
     --muted: #8b8174;
     --font-display: "Silkscreen", "Courier New", monospace;
     --font-body: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -203,6 +204,7 @@
 
   const css = getComputedStyle(document.documentElement);
   const PHOSPHOR = css.getPropertyValue('--phosphor').trim() || '#e9f2e4';
+  const BALL_COLOR = css.getPropertyValue('--ball').trim() || '#fff3a8';
   const SCREEN = css.getPropertyValue('--screen').trim() || '#050807';
 
   // Zustand: 'attract' (Demo, Computer gegen Computer), 'serve', 'play', 'paused', 'over'
@@ -375,6 +377,8 @@
     ctx.fillRect(MARGIN, Math.round(left.y), PADDLE_W, PADDLE_H);
     ctx.fillRect(W - MARGIN - PADDLE_W, Math.round(right.y), PADDLE_W, PADDLE_H);
     if (state !== 'over' && !(serveTimer > 0 && Math.floor(serveTimer * 6) % 2)) {
+      ctx.fillStyle = BALL_COLOR;
+      ctx.shadowColor = BALL_COLOR;
       ctx.fillRect(Math.round(ball.x), Math.round(ball.y), BALL, BALL);
     }
     ctx.shadowBlur = 0;
