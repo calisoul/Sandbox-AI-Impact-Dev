@@ -1,0 +1,431 @@
+<title>Pong Kabinett</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: ein Spielautomat – Bildschirm in einem Gehäuse, darunter das Bedienfeld. Bewusst nur ein (dunkles) Erscheinungsbild. */
+  :root {
+    --cabinet: #1b1612;      /* Gehäuse, dunkles Nussholz */
+    --cabinet-edge: #2c241d;
+    --bezel: #0b0d0c;        /* Bildschirmrahmen */
+    --screen: #050807;       /* Röhre aus */
+    --phosphor: #e9f2e4;     /* weisslicher Phosphor wie beim Original 1972 */
+    --brass: #c9a35b;        /* Akzent: Münzschlitz-Messing */
+    --muted: #8b8174;
+    --font-display: "Silkscreen", "Courier New", monospace;
+    --font-body: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body {
+    background: var(--cabinet);
+    background-image: repeating-linear-gradient(90deg, rgba(255,255,255,.012) 0 2px, transparent 2px 7px);
+    color: var(--phosphor);
+    font-family: var(--font-body);
+    padding-inline: 16px;
+    padding-block: 20px;
+    box-sizing: border-box;
+  }
+  .machine {
+    max-width: 880px;
+    margin-inline: auto;
+    display: grid;
+    gap: 16px;
+  }
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(1.6rem, 5vw, 2.4rem);
+    letter-spacing: .08em;
+    margin: 0;
+    color: var(--brass);
+  }
+  .tagline { color: var(--muted); font-size: .8rem; letter-spacing: .04em; margin: 0; }
+
+  .bezel {
+    background: var(--bezel);
+    border: 1px solid var(--cabinet-edge);
+    border-radius: 18px;
+    padding: clamp(8px, 2vw, 18px);
+    box-shadow: inset 0 0 0 2px #000, 0 10px 30px rgba(0,0,0,.45);
+  }
+  .tube {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--screen);
+    aspect-ratio: 16 / 10;
+    max-width: 100%;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+    cursor: none;
+  }
+  .tube::after { /* Rasterlinien und Wölbung der Röhre */
+    content: "";
+    position: absolute; inset: 0;
+    pointer-events: none;
+    background:
+      repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 1px, transparent 1px 3px),
+      radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.55) 100%);
+  }
+  .overlay {
+    position: absolute; inset: 0;
+    display: grid;
+    place-content: center;
+    gap: 10px;
+    text-align: center;
+    pointer-events: none;
+    padding: 16px;
+  }
+  .overlay .big {
+    font-family: var(--font-display);
+    font-size: clamp(1rem, 3.6vw, 1.7rem);
+    letter-spacing: .1em;
+    text-shadow: 0 0 8px rgba(233,242,228,.55);
+  }
+  .overlay .small { font-size: clamp(.7rem, 2vw, .85rem); color: var(--phosphor); opacity: .75; }
+  .blink { animation: blink 1.1s steps(2, start) infinite; }
+  @keyframes blink { to { visibility: hidden; } }
+
+  .panel {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 20px;
+  }
+  .group { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .label {
+    font-family: var(--font-display);
+    font-size: .7rem;
+    letter-spacing: .12em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  button {
+    font: inherit;
+    font-size: .8rem;
+    color: var(--phosphor);
+    background: var(--cabinet-edge);
+    border: 1px solid #3b3128;
+    border-radius: 6px;
+    padding: 8px 12px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--brass); }
+  button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+  button[aria-pressed="true"] { background: var(--brass); color: var(--cabinet); border-color: var(--brass); }
+  .primary { background: var(--brass); color: var(--cabinet); border-color: var(--brass); font-weight: 500; }
+
+  .help {
+    display: flex; flex-wrap: wrap; gap: 6px 18px;
+    font-size: .78rem; color: var(--muted);
+    margin: 0; padding: 0; list-style: none;
+  }
+  kbd {
+    font-family: var(--font-body);
+    font-size: .74rem;
+    color: var(--phosphor);
+    border: 1px solid #3b3128;
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .blink { animation: none; }
+  }
+</style>
+
+<div class="machine">
+  <header>
+    <h1>PONG</h1>
+    <p class="tagline">Nach dem Atari-Automaten von 1972 · erster Spieler mit 11 Punkten gewinnt</p>
+  </header>
+
+  <div class="bezel">
+    <div class="tube">
+      <canvas id="game" width="800" height="500" aria-label="Pong-Spielfeld"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="big blink" id="overlayTitle">MÜNZE EINWERFEN</div>
+        <div class="small" id="overlayText">Leertaste drücken oder tippen, um zu spielen</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="group" role="group" aria-label="Schwierigkeit">
+      <span class="label">Gegner</span>
+      <button id="lvl-easy" data-level="easy" aria-pressed="false">Leicht</button>
+      <button id="lvl-normal" data-level="normal" aria-pressed="true">Mittel</button>
+      <button id="lvl-hard" data-level="hard" aria-pressed="false">Schwer</button>
+    </div>
+    <div class="group">
+      <button id="sound" aria-pressed="false">Ton aus</button>
+      <button id="start" class="primary">Neues Spiel</button>
+    </div>
+  </div>
+
+  <ul class="help">
+    <li><kbd>W</kbd> <kbd>S</kbd> oder <kbd>↑</kbd> <kbd>↓</kbd> Schläger bewegen</li>
+    <li>Maus oder Finger auf dem Bildschirm steuert ebenfalls</li>
+    <li><kbd>Leertaste</kbd> Start / Pause</li>
+  </ul>
+</div>
+
+<script>
+(() => {
+  const W = 800, H = 500;
+  const PADDLE_H = 70, PADDLE_W = 10, BALL = 10, MARGIN = 30, WIN = 11;
+  const LEVELS = {
+    easy:   { speed: 220, reaction: 0.22, error: 40 },
+    normal: { speed: 320, reaction: 0.12, error: 22 },
+    hard:   { speed: 450, reaction: 0.05, error: 8 },
+  };
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const overlay = document.getElementById('overlay');
+  const overlayTitle = document.getElementById('overlayTitle');
+  const overlayText = document.getElementById('overlayText');
+  const soundBtn = document.getElementById('sound');
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const css = getComputedStyle(document.documentElement);
+  const PHOSPHOR = css.getPropertyValue('--phosphor').trim() || '#e9f2e4';
+  const SCREEN = css.getPropertyValue('--screen').trim() || '#050807';
+
+  // Zustand: 'attract' (Demo, Computer gegen Computer), 'serve', 'play', 'paused', 'over'
+  let state = 'attract';
+  let level = 'normal';
+  let score = [0, 0];
+  let serveTimer = 0;
+  let serveDir = 1;
+  const left  = { y: H / 2 - PADDLE_H / 2, target: H / 2, think: 0 };
+  const right = { y: H / 2 - PADDLE_H / 2, target: H / 2, think: 0 };
+  const ball  = { x: W / 2, y: H / 2, vx: 0, vy: 0, speed: 0 };
+  const keys = { up: false, down: false };
+  let pointerY = null;
+
+  // ---------- Ton ----------
+  let audio = null, soundOn = false;
+  function beep(freq, dur) {
+    if (!soundOn || !audio) return;
+    const o = audio.createOscillator(), g = audio.createGain();
+    o.type = 'square';
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(0.06, audio.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + dur);
+    o.connect(g).connect(audio.destination);
+    o.start();
+    o.stop(audio.currentTime + dur);
+  }
+  soundBtn.addEventListener('click', () => {
+    try {
+      if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+      audio.resume();
+      soundOn = !soundOn;
+    } catch (e) { soundOn = false; }
+    soundBtn.textContent = soundOn ? 'Ton an' : 'Ton aus';
+    soundBtn.setAttribute('aria-pressed', String(soundOn));
+    if (soundOn) beep(490, 0.06);
+  });
+
+  // ---------- Spiellogik ----------
+  function resetBall(dir) {
+    ball.x = W / 2 - BALL / 2;
+    ball.y = H / 2 - BALL / 2;
+    ball.vx = 0; ball.vy = 0;
+    serveDir = dir;
+    serveTimer = 0.9;
+  }
+  function launch() {
+    ball.speed = 340;
+    const angle = (Math.random() * 0.8 - 0.4);
+    ball.vx = Math.cos(angle) * ball.speed * serveDir;
+    ball.vy = Math.sin(angle) * ball.speed;
+  }
+  function newGame() {
+    score = [0, 0];
+    left.y = right.y = H / 2 - PADDLE_H / 2;
+    resetBall(Math.random() < 0.5 ? -1 : 1);
+    state = 'serve';
+    showOverlay(null);
+  }
+  function showOverlay(title, text, blink) {
+    if (!title) { overlay.hidden = true; return; }
+    overlay.hidden = false;
+    overlayTitle.textContent = title;
+    overlayText.textContent = text || '';
+    overlayTitle.classList.toggle('blink', !!blink);
+  }
+
+  function cpu(p, dt, cfg) {
+    // Reagiert nur alle paar Zehntelsekunden und zielt nicht exakt – so bleibt er schlagbar.
+    p.think -= dt;
+    if (p.think <= 0) {
+      p.think = cfg.reaction;
+      const coming = (p === left) ? ball.vx < 0 : ball.vx > 0;
+      p.target = coming ? ball.y + BALL / 2 + (Math.random() * 2 - 1) * cfg.error : H / 2;
+    }
+    const center = p.y + PADDLE_H / 2;
+    const diff = p.target - center;
+    const step = Math.sign(diff) * Math.min(Math.abs(diff), cfg.speed * dt);
+    p.y = clamp(p.y + step, 0, H - PADDLE_H);
+  }
+  function player(dt) {
+    if (pointerY !== null) {
+      left.y = clamp(pointerY - PADDLE_H / 2, 0, H - PADDLE_H);
+    } else {
+      const v = 480 * ((keys.down ? 1 : 0) - (keys.up ? 1 : 0));
+      left.y = clamp(left.y + v * dt, 0, H - PADDLE_H);
+    }
+  }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+  function hitPaddle(p, x, dir) {
+    if (ball.y + BALL < p.y || ball.y > p.y + PADDLE_H) return false;
+    // Trefferpunkt bestimmt den Winkel, wie beim Original mit segmentiertem Schläger.
+    const rel = ((ball.y + BALL / 2) - (p.y + PADDLE_H / 2)) / (PADDLE_H / 2);
+    const angle = clamp(rel, -1, 1) * 0.9;
+    ball.speed = Math.min(ball.speed * 1.06, 820);
+    ball.vx = Math.cos(angle) * ball.speed * dir;
+    ball.vy = Math.sin(angle) * ball.speed;
+    ball.x = x;
+    beep(460, 0.05);
+    return true;
+  }
+
+  function update(dt) {
+    const demo = state === 'attract';
+    if (state === 'paused' || state === 'over') return;
+
+    if (demo) cpu(left, dt, LEVELS.normal); else player(dt);
+    cpu(right, dt, LEVELS[demo ? 'normal' : level]);
+
+    if (serveTimer > 0) {
+      serveTimer -= dt;
+      if (serveTimer <= 0) { launch(); if (!demo) state = 'play'; }
+      return;
+    }
+
+    ball.x += ball.vx * dt;
+    ball.y += ball.vy * dt;
+
+    if (ball.y <= 0) { ball.y = 0; ball.vy = Math.abs(ball.vy); beep(226, 0.04); }
+    if (ball.y + BALL >= H) { ball.y = H - BALL; ball.vy = -Math.abs(ball.vy); beep(226, 0.04); }
+
+    const lx = MARGIN + PADDLE_W, rx = W - MARGIN - PADDLE_W;
+    const prevX = ball.x - ball.vx * dt; // Kreuzungstest, damit schnelle Bälle nicht durch den Schläger tunneln
+    if (ball.vx < 0 && ball.x <= lx && prevX >= lx - 1) hitPaddle(left, lx, 1);
+    if (ball.vx > 0 && ball.x + BALL >= rx && prevX + BALL <= rx + 1) hitPaddle(right, rx - BALL, -1);
+
+    if (ball.x + BALL < 0 || ball.x > W) {
+      const scorer = ball.x > W ? 0 : 1;
+      beep(150, 0.25);
+      if (demo) { resetBall(scorer === 0 ? 1 : -1); return; }
+      score[scorer]++;
+      if (score[scorer] >= WIN) {
+        state = 'over';
+        showOverlay(scorer === 0 ? 'DU GEWINNST' : 'COMPUTER GEWINNT',
+          `${score[0]} : ${score[1]} · Leertaste oder tippen für eine Revanche`);
+        return;
+      }
+      resetBall(scorer === 0 ? 1 : -1);
+      state = 'serve';
+    }
+  }
+
+  // ---------- Darstellung ----------
+  // Ziffern als 3×5-Blockraster, wie die Punkteanzeige des Automaten.
+  const DIGITS = ['111101101101111','010110010010111','111001111100111','111001111001111','101101111001001',
+                  '111100111001111','111100111101111','111001001001001','111101111101111','111101111001111'];
+  function drawNumber(n, cx, y, s) {
+    const str = String(n);
+    const w = str.length * 4 * s - s;
+    let x = cx - w / 2;
+    for (const ch of str) {
+      const bits = DIGITS[+ch];
+      for (let i = 0; i < 15; i++) if (bits[i] === '1') ctx.fillRect(x + (i % 3) * s, y + Math.floor(i / 3) * s, s, s);
+      x += 4 * s;
+    }
+  }
+  function draw() {
+    ctx.fillStyle = SCREEN;
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = PHOSPHOR;
+    ctx.shadowColor = PHOSPHOR;
+    ctx.shadowBlur = reduceMotion ? 0 : 10;
+
+    for (let y = 6; y < H; y += 24) ctx.fillRect(W / 2 - 2, y, 4, 12); // Netz
+    if (state !== 'attract') {
+      drawNumber(score[0], W / 2 - 90, 28, 9);
+      drawNumber(score[1], W / 2 + 90, 28, 9);
+    }
+    ctx.fillRect(MARGIN, Math.round(left.y), PADDLE_W, PADDLE_H);
+    ctx.fillRect(W - MARGIN - PADDLE_W, Math.round(right.y), PADDLE_W, PADDLE_H);
+    if (state !== 'over' && !(serveTimer > 0 && Math.floor(serveTimer * 6) % 2)) {
+      ctx.fillRect(Math.round(ball.x), Math.round(ball.y), BALL, BALL);
+    }
+    ctx.shadowBlur = 0;
+  }
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min((now - last) / 1000, 1 / 30);
+    last = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- Steuerung ----------
+  function primaryAction() {
+    if (state === 'attract' || state === 'over') newGame();
+    else if (state === 'paused') { state = serveTimer > 0 ? 'serve' : 'play'; showOverlay(null); }
+    else { state = 'paused'; showOverlay('PAUSE', 'Leertaste oder tippen zum Weiterspielen'); }
+  }
+  addEventListener('keydown', e => {
+    if (e.target.closest && e.target.closest('button') && (e.key === ' ' || e.key === 'Enter')) return;
+    if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') { keys.up = true; pointerY = null; e.preventDefault(); }
+    if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') { keys.down = true; pointerY = null; e.preventDefault(); }
+    if (e.key === ' ') { primaryAction(); e.preventDefault(); }
+  });
+  addEventListener('keyup', e => {
+    if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') keys.up = false;
+    if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') keys.down = false;
+  });
+  function toGameY(e) {
+    const r = canvas.getBoundingClientRect();
+    return (e.clientY - r.top) / r.height * H;
+  }
+  canvas.addEventListener('pointermove', e => { pointerY = toGameY(e); });
+  canvas.addEventListener('pointerdown', e => {
+    pointerY = toGameY(e);
+    if (state !== 'play' && state !== 'serve') primaryAction();
+  });
+  canvas.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') pointerY = null; });
+
+  document.getElementById('start').addEventListener('click', newGame);
+  document.querySelectorAll('[data-level]').forEach(btn => btn.addEventListener('click', () => {
+    level = btn.dataset.level;
+    document.querySelectorAll('[data-level]').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+  }));
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && (state === 'play' || state === 'serve')) primaryAction();
+  });
+
+  resetBall(1);
+  requestAnimationFrame(frame);
+})();
+</script>
